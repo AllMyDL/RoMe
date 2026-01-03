@@ -1,9 +1,9 @@
 wandb:
-  name: "######"
-  dir: "######/temp_file/wandb"
-  entity: "######"
+  name: "rome"
+  dir: "/root/wandb"
+  entity: "1457615966-xx"
   tags: []
-  project: "######"
+  project: "rome"
 
 # when on cluster, no wandb logs
 cluster: False
@@ -46,13 +46,13 @@ epochs: 7
 num_workers: 4
 
 dataset: "NuscDataset"
-version: "mini" # mini, trainval
-base_dir: "######/Nuscenes"
-image_dir: "######/nuScenes/"
+version: "trainval" # mini, trainval
+base_dir: "/root/autodl-tmp/nuscenes_rome"
+image_dir: "/root/autodl-tmp/nuscenes_rome"
 eval: False
 
 clip_list:
-  - "scene-0856"
+  - "scene-0063"
 
 center_point:
   x: 0.0
