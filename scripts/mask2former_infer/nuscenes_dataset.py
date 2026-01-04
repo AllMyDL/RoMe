@@ -1,7 +1,12 @@
 import os
 
+
 def CrawlNuScenesDataPath(base_dir, camera_names):
-    """get all image_paths under base_dir
+    """
+    获取base_dir下所有图像路径
+    :param base_dir: 基础目录
+    :param camera_names: 相机名称列表
+    :return: 图像路径列表
     """
     image_paths = []
     for camera_name in camera_names:
@@ -12,7 +17,7 @@ def CrawlNuScenesDataPath(base_dir, camera_names):
         print(image_paths[-1])
     return image_paths
 
-    
+
 if __name__ == "__main__":
     base_dir = "#####/Nuscenes/samples/"
     camera_names = ["CAM_FRONT", "CAM_FRONT_LEFT", "CAM_FRONT_RIGHT",

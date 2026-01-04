@@ -1,6 +1,13 @@
 import os
+
+
 def CrawlKittiDataPath(base_dir, sequences, camera):
-    """get all image_paths under base_dir
+    """
+    获取base_dir下所有图像路径
+    :param base_dir: 基础目录
+    :param sequences: 序列列表
+    :param camera: 相机名称
+    :return: 图像路径列表
     """
     image_paths = []
     for sequence in sequences:
@@ -10,7 +17,8 @@ def CrawlKittiDataPath(base_dir, sequences, camera):
         image_paths += image_abs_list
         print(image_paths[-1])
     return image_paths
-    
+
+
 if __name__ == "__main__":
     base_dir = "#####/KittiOdom/sequences/"
     sequences = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10"]

@@ -1,72 +1,75 @@
+# RoMe 项目使用 NuScenes 数据集的配置文件
+
+# Wandb 日志配置
 wandb:
-  name: "rome"
-  dir: "/root/wandb"
-  entity: "1457615966-xx"
-  tags: []
-  project: "rome"
+  name: "rome"  # 实验名称
+  dir: "/root/wandb"  # Wandb 日志目录
+  entity: "1457615966-xx"  # Wandb 实体
+  tags: []  # 实验标签
+  project: "rome"  # Wandb 项目名称
 
-# when on cluster, no wandb logs
-cluster: False
-replace_name: False
+# 集群设置
+cluster: False  # 是否在集群上运行（如果为真，则禁用 wandb）
+replace_name: False  # 是否替换实验名称
 
-# BEV size
-bev_x_length: 100
-bev_y_length: 100
-bev_resolution: 0.1  # meters
-bev_x_pixel: 1000
-bev_y_pixel: 1000
-cut_range: 7
+# BEV（鸟瞰图）配置
+bev_x_length: 100  # BEV x 方向长度（米）
+bev_y_length: 100  # BEV y 方向长度（米）
+bev_resolution: 0.1  # BEV 分辨率（米每像素）
+bev_x_pixel: 1000  # x 方向像素数
+bev_y_pixel: 1000  # y 方向像素数
+cut_range: 7  # BEV 裁剪范围
 
-# Training Parameters
-waypoint_radius: 120  # meters
-batch_size: 4
-pos_enc: 5
-lr: 
-  vertices_rgb: 0.1
-  vertices_label: 0.1
-  vertices_z: 0.001
-  # vertices_z: 0.0
-  rotations: 0.01
-  translations: 0.01
+# 训练参数
+waypoint_radius: 120  # 路径点采样半径（米）
+batch_size: 4  # 批次大小
+pos_enc: 5  # 位置编码维度
+lr:  # 不同组件的学习率
+  vertices_rgb: 0.1  # RGB 顶点学习率
+  vertices_label: 0.1  # 标签顶点学习率
+  vertices_z: 0.001  # z 顶点学习率
+  # vertices_z: 0.0  # 备选学习率（已注释）
+  rotations: 0.01  # 旋转学习率
+  translations: 0.01  # 平移学习率
 
-extrinsic:  # extrinsic optimization range
-  rotation_deg: 0.5
-  translation_m: 0.5
-  start_epoch: 0
+extrinsic:  # 外参优化范围
+  rotation_deg: 0.5  # 最大旋转优化（度）
+  translation_m: 0.5  # 最大平移优化（米）
+  start_epoch: 0  # 开始外参优化的 epoch
 
-lr_milestones: [1, 4]
-lr_gamma: 0.1
-seg_loss_weight: 1
-normal_loss_weight: 0
-laplacian_loss_weight: 1
-rand_seed: 17
-epochs: 7
+lr_milestones: [1, 4]  # 学习率衰减的 epoch
+lr_gamma: 0.1  # 学习率衰减因子
+seg_loss_weight: 1  # 分割损失权重
+normal_loss_weight: 0  # 法线损失权重
+laplacian_loss_weight: 1  # 拉普拉斯损失权重
+rand_seed: 17  # 随机种子，用于重现性
+epochs: 7  # 训练 epoch 数
 
-# Performance Parameters
-num_workers: 4
+# 性能参数
+num_workers: 4  # 数据加载工作线程数
 
-dataset: "NuscDataset"
-version: "trainval" # mini, trainval
-base_dir: "/root/autodl-tmp/nuscenes_rome"
-image_dir: "/root/autodl-tmp/nuscenes_rome"
-eval: False
+# 数据集配置
+dataset: "NuscDataset"  # 数据集类名
+version: "trainval"  # 数据集版本（mini, trainval）
+base_dir: "/root/autodl-tmp/nuscenes_rome"  # 数据集基础目录
+image_dir: "/root/autodl-tmp/nuscenes_rome"  # 图像目录
+eval: False  # 是否为评估模式
 
-clip_list:
+clip_list:  # 要使用的场景列表
   - "scene-0063"
 
-center_point:
+center_point:  # 坐标系中心点
   x: 0.0
   y: 0.0
 
-
-# minimum distance between frame to sample the dataset
+# 采样数据集时帧之间的最小距离
 min_distance: 0.2
 
-# resized image size
+# 调整后的图像大小
 image_width: 800
 image_height: 450
 
-camera_names:
+camera_names:  # 要使用的相机名称列表
   - "CAM_FRONT"
   - "CAM_FRONT_LEFT"
   - "CAM_FRONT_RIGHT"

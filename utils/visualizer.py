@@ -13,43 +13,68 @@ import pymeshlab
 
 
 def mesh2height(mesh, bev_size_pixel):
+    """
+    将网格转换为高度图
+    :param mesh: 网格对象
+    :param bev_size_pixel: BEV像素尺寸
+    :return: 高度张量
+    """
     z_tensor = mesh._verts_list[0][:, 2]
     z_tensor = z_tensor.reshape(bev_size_pixel)
     return z_tensor
 
 
 def loss2color(loss):
+    """
+    将损失值转换为颜色映射
+    :param loss: 损失数组
+    :return: RGB颜色图像
+    """
     min, max = loss.min(), loss.max()
     if (max-min) < 1e-7:
         loss = np.zeros_like(loss)
     else:
-        # normalize depth by min max
+        # 通过最大最小值归一化深度
         loss = (loss - min) / (max - min)
         loss.clip(0, 1)
-    # convert to rgb
+    # 转换为rgb
     loss = (loss * 255).astype(np.uint8)
     loss_rgb = cv2.applyColorMap(loss, cv2.COLORMAP_HOT)
-    # BGR to RGB
+    # BGR到RGB
     loss_rgb = cv2.cvtColor(loss_rgb, cv2.COLOR_BGR2RGB)
     return loss_rgb
 
 
 def depth2color(depth, min, max, rescale=False):
-    # normalize depth by min max
+    """
+    将深度图转换为颜色映射
+    :param depth: 深度数组
+    :param min: 最小深度值
+    :param max: 最大深度值
+    :param rescale: 是否重新缩放
+    :return: RGB颜色图像
+    """
+    # 通过最大最小值归一化深度
     depth = (depth - min) / (max - min)
     depth = depth.clip(0, 1)
     if rescale:
         depth = np.sqrt(depth)
-    # convert to rgb
+    # 转换为rgb
     depth = (depth * 255).astype(np.uint8)
     # depth_rgb = cv2.applyColorMap(depth, cv2.COLORMAP_HOT)
     depth_rgb = cv2.applyColorMap(depth, cv2.COLORMAP_JET)
-    # BGR to RGB
+    # BGR到RGB
     depth_rgb = cv2.cvtColor(depth_rgb, cv2.COLOR_BGR2RGB)
     return depth_rgb
 
 
 def save_mesh(mesh, path, bev_size_pixel):
+    """
+    保存网格为OBJ文件
+    :param mesh: 网格对象
+    :param path: 保存路径（必须是.obj文件）
+    :param bev_size_pixel: BEV像素尺寸
+    """
     assert path.endswith(".obj"), "path must be a obj file"
     with torch.no_grad():
         verts = mesh._verts_list[0].detach().cpu()
@@ -63,6 +88,11 @@ def save_mesh(mesh, path, bev_size_pixel):
 
 
 def save_cut_mesh(mesh, path):
+    """
+    保存裁剪后的网格为OBJ文件
+    :param mesh: 网格对象
+    :param path: 保存路径（必须是.obj文件）
+    """
     assert path.endswith(".obj"), "path must be a obj file"
     with torch.no_grad():
         verts = mesh._verts_list[0].detach().cpu().numpy()
@@ -72,11 +102,17 @@ def save_cut_mesh(mesh, path):
         m = pymeshlab.Mesh(vertex_matrix=verts, face_matrix=faces, v_color_matrix=vert_colors)
         ms = pymeshlab.MeshSet()
         ms.add_mesh(m, "vcolor_mesh")
-        # save the mesh
+        # 保存网格
         ms.save_current_mesh(path)
 
 
 def save_cut_label_mesh(mesh, path, color_map):
+    """
+    保存带有标签颜色的裁剪网格为OBJ文件
+    :param mesh: 网格对象
+    :param path: 保存路径（必须是.obj文件）
+    :param color_map: 颜色映射字典
+    """
     assert path.endswith(".obj"), "path must be a obj file"
     with torch.no_grad():
         verts = mesh._verts_list[0].detach().cpu().numpy()
@@ -91,11 +127,14 @@ def save_cut_label_mesh(mesh, path, color_map):
         m = pymeshlab.Mesh(vertex_matrix=verts,face_matrix=faces,v_color_matrix=vert_colors)
         ms = pymeshlab.MeshSet()
         ms.add_mesh(m, "vcolor_mesh")
-        # save the mesh
+        # 保存网格
         ms.save_current_mesh(path)
 
 
 class MeshRendererWithDepth(nn.Module):
+    """
+    带深度的网格渲染器
+    """
     def __init__(self, rasterizer, shader):
         super().__init__()
         self.rasterizer = rasterizer
@@ -108,6 +147,9 @@ class MeshRendererWithDepth(nn.Module):
 
 
 class Visualizer(nn.Module):
+    """
+    可视化器类
+    """
     def __init__(self, device, configs):
         super().__init__()
         self.device = device

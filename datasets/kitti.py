@@ -9,13 +9,16 @@ from utils.plane_fit import robust_estimate_flatplane
 
 
 class KittiDataset(BaseDataset):
+    """
+    KITTI数据集类，用于处理KITTI数据集的图像、标签和位姿数据
+    """
     def __init__(self, configs):
         super().__init__()
         self.resized_image_size = (configs["image_width"], configs["image_height"])
         self.base_dir = configs["base_dir"]
         self.image_dir = configs["image_dir"]
         self.sequence = configs["sequence"]
-        camera_names = configs["camera_names"]  # image_2 or image_3
+        camera_names = configs["camera_names"]  # image_2 或 image_3
         self.choose_pt = [configs["choose_point"]["x"], configs["choose_point"]["y"]]
         x_offset = -configs["center_point"]["x"] + configs["bev_x_length"]/2
         y_offset = -configs["center_point"]["y"] + configs["bev_y_length"]/2
@@ -33,7 +36,7 @@ class KittiDataset(BaseDataset):
                                         [2.427880e-02, 2.223358e-03, 9.997028e-01, -5.250882e-03],
                                         [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
         self.transform_32 = np.linalg.inv(self.transform_03) @ self.transform_02
-        self.extrinsic = np.eye(4)  # only support image_2 now
+        self.extrinsic = np.eye(4)  # 目前只支持image_2
         self.camera_extrinsics = []
         self.d = 0
         self.camera_height = 1.6
@@ -51,8 +54,8 @@ class KittiDataset(BaseDataset):
         ], dtype=np.float32)
         self.min_distance = configs["min_distance"]
 
-        # start loading all filename and poses
-        ref_poses = self.get_ref_poses(self.sequence)  # refrece image_2 to chassis
+        # 开始加载所有文件名和位姿
+        ref_poses = self.get_ref_poses(self.sequence)  # 参考image_2到chassis
 
         for camera_idx, camera_name in enumerate(camera_names):
             camera_paths = listdir(join(self.base_dir, "sequences", self.sequence, camera_name))
@@ -92,29 +95,34 @@ class KittiDataset(BaseDataset):
                 # 5. camera index
                 self.cameras_idx_all.append(camera_idx)
 
-        # 6. estimate flat plane
+        # 6. 估计平面
         self.file_check()
         self.label_valid_check()
         ref_camera2world_all = np.array(self.ref_camera2world_all)
-        print("before plane estimation, z std = ", ref_camera2world_all[:, 2, 3].std())
+        print("平面估计前，z标准差 = ", ref_camera2world_all[:, 2, 3].std())
         transform_normal2origin = robust_estimate_flatplane(np.array(ref_camera2world_all)[:, :3, 3]).astype(np.float32)
         transform_normal2origin[0, 3] = -self.choose_pt[0]
         transform_normal2origin[1, 3] = -self.choose_pt[1]
         transform_normal2origin[2, 3] += self.camera_height
         self.ref_camera2world_all = transform_normal2origin[None] @ self.ref_camera2world_all
-        print("after plane estimation, z std = ", self.ref_camera2world_all[:, 2, 3].std())
+        print("平面估计后，z标准差 = ", self.ref_camera2world_all[:, 2, 3].std())
 
-        # 7. filter poses in bev range
+        # 7. 过滤BEV范围内的位姿
         all_camera_xy = np.asarray(self.ref_camera2world_all)[:, :2, 3]
         available_mask_x = abs(all_camera_xy[:, 0]) < configs["bev_x_length"] // 2 + 10
         available_mask_y = abs(all_camera_xy[:, 1]) < configs["bev_y_length"] // 2 + 10
         available_mask = available_mask_x & available_mask_y
         available_idx = list(np.where(available_mask)[0])
-        print(f"before poses filtering, pose num = {available_mask.shape[0]}")
+        print(f"位姿过滤前，位姿数量 = {available_mask.shape[0]}")
         self.filter_by_index(available_idx)
-        print(f"after poses filtering, pose num = {available_mask.sum()}")
+        print(f"位姿过滤后，位姿数量 = {available_mask.sum()}")
 
     def loadarray_kitti(self, array):
+        """
+        加载KITTI格式的位姿数组
+        :param array: 输入位姿数组
+        :return: 4x4变换矩阵数组
+        """
         input_pose = array
         assert(input_pose.shape[1] == 12)
         length = input_pose.shape[0]
@@ -125,17 +133,28 @@ class KittiDataset(BaseDataset):
         return transforms
 
     def get_ref_poses(self, sequence):
+        """
+        获取参考位姿
+        :param sequence: 序列号
+        :return: 相机位姿数组
+        """
         # odometry_path = join(self.base_dir, f"sequences/gt_pose/{sequence}.txt")
         odometry_path = join(self.base_dir, f"sequences/orbslam2/{sequence}.txt")
         if not isfile(odometry_path):
             return None
         camera_poses = self.loadarray_kitti(np.loadtxt(odometry_path))
-        camera_poses = self.camera2chassis @ camera_poses  # refrece to chassis
+        camera_poses = self.camera2chassis @ camera_poses  # 参考到chassis
         return camera_poses
 
     def get_extrinsic(self, camera_name, camera_name_0):
-        assert camera_name_0 == "image_2", "camera_name_0 should be image_2"
-        assert camera_name in ["image_2", "image_3"], "camera_name should be image_2 or image_3"
+        """
+        获取相机外参
+        :param camera_name: 相机名称
+        :param camera_name_0: 参考相机名称
+        :return: 外参矩阵
+        """
+        assert camera_name_0 == "image_2", "camera_name_0 应该是 image_2"
+        assert camera_name in ["image_2", "image_3"], "camera_name 应该是 image_2 或 image_3"
         if camera_name == camera_name_0:
             return np.eye(4)
         else:
@@ -145,22 +164,33 @@ class KittiDataset(BaseDataset):
                 return np.linalg.inv(self.extrinsic)
 
     def file_check(self):
+        """
+        检查文件是否存在
+        """
         image_paths = [join(self.base_dir, image_path) for image_path in self.image_filenames_all]
         label_paths = [join(self.image_dir, label_path) for label_path in self.label_filenames_all]
         image_exists = np.asarray(self.check_filelist_exist(image_paths))
         label_exists = np.asarray(self.check_filelist_exist(label_paths))
         available_index = list(np.where(image_exists * label_exists)[0])
-        print(f"Drop {len(image_paths) - len(available_index)} frames out of {len(image_paths)} by file exists check")
+        print(f"通过文件存在检查，从 {len(image_paths)} 帧中丢弃 {len(image_paths) - len(available_index)} 帧")
         self.filter_by_index(available_index)
 
     def label_valid_check(self):
+        """
+        检查标签有效性
+        """
         label_paths = [join(self.image_dir, label_path) for label_path in self.label_filenames_all]
         label_valid = np.asarray(self.check_label_valid(label_paths))
         available_index = list(np.where(label_valid)[0])
-        print(f"Drop {len(label_paths) - len(available_index)} frames out of {len(label_paths)} by label valid check")
+        print(f"通过标签有效性检查，从 {len(label_paths)} 帧中丢弃 {len(label_paths) - len(available_index)} 帧")
         self.filter_by_index(available_index)
 
     def label_valid(self, label_name):
+        """
+        检查单个标签是否有效
+        :param label_name: 标签文件名
+        :return: 是否有效
+        """
         label = cv2.imread(label_name, cv2.IMREAD_UNCHANGED)
         label_movable = label >= 52
         ratio_movable = label_movable.sum() / label_movable.size
@@ -173,17 +203,31 @@ class KittiDataset(BaseDataset):
             return True
 
     def check_label_valid(self, filelist):
+        """
+        并行检查标签有效性
+        :param filelist: 文件列表
+        :return: 有效性列表
+        """
         with Pool(32) as p:
             exist_list = p.map(self.label_valid, filelist)
         return exist_list
 
     def filter_by_index(self, index):
+        """
+        根据索引过滤数据
+        :param index: 索引列表
+        """
         self.image_filenames_all = [self.image_filenames_all[i] for i in index]
         self.label_filenames_all = [self.label_filenames_all[i] for i in index]
         self.ref_camera2world_all = [self.ref_camera2world_all[i] for i in index]
         self.cameras_K_all = [self.cameras_K_all[i] for i in index]
 
     def set_waypoint(self, center_xy, radius):
+        """
+        设置路径点
+        :param center_xy: 中心坐标
+        :param radius: 半径
+        """
         center_xy = np.asarray([center_xy[0], center_xy[1]], dtype=np.float32)
         all_camera_xy = np.asarray(self.ref_camera2world_all)[:, :2, 3]
         distances = np.linalg.norm(all_camera_xy - center_xy, ord=np.inf, axis=1)
@@ -196,6 +240,11 @@ class KittiDataset(BaseDataset):
         self.activated_idx = activated_idx
 
     def label2mask(self, label):
+        """
+        将标签转换为遮罩
+        :param label: 标签图像
+        :return: 遮罩和处理后的标签
+        """
         # Bird, Ground Animal, Curb, Fence, Guard Rail,
         # Barrier, Wall, Bike Lane, Crosswalk - Plain, Curb Cut,
         # Parking, Pedestrian Area, Rail Track, Road, Service Lane,
@@ -212,7 +261,7 @@ class KittiDataset(BaseDataset):
         mask = np.ones_like(label)
         label_off_road = ((0 <= label) & (label <= 1)) | ((3 <= label) & (label <= 6)) | ((10 <= label) & (label <= 12)) \
             | ((16 <= label) & (label <= 22)) | ((25 <= label) & (label <= 28)) | ((30 <= label) & (label <= 40)) | (label >= 42)
-        # dilate itereation 2 for moving objects
+        # 移动对象膨胀迭代2次
         label_movable = label >= 52
         kernel = np.ones((10, 10), dtype=np.uint8)
         label_movable = cv2.dilate(label_movable.astype(np.uint8), kernel, 2).astype(np.bool)
@@ -225,12 +274,17 @@ class KittiDataset(BaseDataset):
         return mask, label
 
     def __getitem__(self, idx):
+        """
+        获取数据集项
+        :param idx: 索引
+        :return: 数据样本字典
+        """
         sample = dict()
         sample["idx"] = idx
         sample["camera_idx"] = self.cameras_idx[idx]
         sample["camera2ref"] = self.camera_extrinsics[sample["camera_idx"]]
 
-        # read image
+        # 读取图像
         image_path = self.image_filenames[idx]
         input_image = cv2.imread(join(self.base_dir, image_path))
         crop_cy = int(self.resized_image_size[1] * 0.4)
@@ -238,17 +292,17 @@ class KittiDataset(BaseDataset):
         origin_image_size = input_image.shape
         resized_image = cv2.resize(input_image, dsize=self.resized_image_size, interpolation=cv2.INTER_LINEAR)
         resized_image = cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB)
-        resized_image = resized_image[crop_cy:, :, :]  # crop the sky
+        resized_image = resized_image[crop_cy:, :, :]  # 裁剪天空
         sample["image"] = (np.asarray(resized_image)/255.0).astype(np.float32)
 
-        # read label
+        # 读取标签
         label_path = join(self.image_dir, self.label_filenames[idx])
         label = cv2.imread(label_path, cv2.IMREAD_UNCHANGED)
         resized_label = cv2.resize(label, dsize=self.resized_image_size, interpolation=cv2.INTER_NEAREST)
         mask, label = self.label2mask(resized_label)
         label = self.remap_semantic(label).astype(np.long)
 
-        mask = mask[crop_cy:, :]  # crop the sky
+        mask = mask[crop_cy:, :]  # 裁剪天空
         label = label[crop_cy:, :]
         sample["static_mask"] = mask
         sample["static_label"] = label
@@ -269,6 +323,9 @@ class KittiDataset(BaseDataset):
 
     @ property
     def label_remaps(self):
+        """
+        标签重映射
+        """
         colors = np.ones((256, 1), dtype="uint8")
         colors *= 4          # background
         colors[7, :] = 1     # Lane marking
@@ -284,6 +341,9 @@ class KittiDataset(BaseDataset):
 
     @ property
     def origin_color_map(self):
+        """
+        原始颜色映射
+        """
         colors = np.zeros((256, 1, 3), dtype='uint8')
         colors[0, :, :] = [165, 42, 42]  # Bird
         colors[1, :, :] = [0, 192, 0]  # Ground Animal
@@ -355,10 +415,16 @@ class KittiDataset(BaseDataset):
 
     @property
     def num_class(self):
+        """
+        类别数量
+        """
         return 5
 
     @ property
     def filted_color_map(self):
+        """
+        过滤后的颜色映射
+        """
         colors = np.zeros((256, 1, 3), dtype='uint8')
         colors[0, :, :] = [0, 0, 0]         # mask
         colors[1, :, :] = [0, 0, 255]       # all lane

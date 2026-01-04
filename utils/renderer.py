@@ -10,41 +10,43 @@ def hard_channel_blend(
     colors: torch.Tensor, fragments,
 ) -> torch.Tensor:
     """
-    Naive blending of top K faces to return an C+1 image
+    简单地将前K个面的颜色混合，返回C+1通道图像
     Args:
-        colors: (N, H, W, K, C) RGB color for each of the top K faces per pixel.
-        fragments: the outputs of rasterization. From this we use
-            - pix_to_face: LongTensor of shape (N, H, W, K) specifying the indices
-              of the faces (in the packed representation) which
-              overlap each pixel in the image. This is used to
-              determine the output shape.
+        colors: (N, H, W, K, C) 每个像素前K个面的RGB颜色
+        fragments: 光栅化的输出。从中我们使用
+            - pix_to_face: 形状为(N, H, W, K)的LongTensor，指定
+              与图像中每个像素重叠的面索引（在打包表示中）。这用于
+              确定输出形状
     Returns:
-        RGBA pixel_channels: (N, H, W, C+1)
+        RGBA像素通道: (N, H, W, C+1)
     """
     N, H, W, K = fragments.pix_to_face.shape
     device = fragments.pix_to_face.device
 
-    # Mask for the background.
+    # 背景遮罩
     is_background = fragments.pix_to_face[..., 0] < 0  # (N, H, W)
 
     background_color = torch.ones(colors.shape[-1], dtype=colors.dtype, device=colors.device)
 
-    # Find out how much background_color needs to be expanded to be used for masked_scatter.
+    # 找出需要扩展多少背景颜色以用于masked_scatter
     num_background_pixels = is_background.sum()
 
-    # Set background color.
+    # 设置背景颜色
     pixel_colors = colors[..., 0, :].masked_scatter(
         is_background[..., None],
         background_color[None, :].expand(num_background_pixels, -1),
     )  # (N, H, W, C)
 
-    # Concat with the alpha channel.
+    # 与alpha通道连接
     alpha = (~is_background).type_as(pixel_colors)[..., None]
 
     return torch.cat([pixel_colors, alpha], dim=-1)  # (N, H, W, C+1)
 
 
 class SimpleShader(nn.Module):
+    """
+    简单着色器类
+    """
     def __init__(self):
         super().__init__()
 
@@ -55,6 +57,9 @@ class SimpleShader(nn.Module):
 
 
 class MeshRendererWithDepth(nn.Module):
+    """
+    带深度的网格渲染器
+    """
     def __init__(self, rasterizer, shader):
         super().__init__()
         self.rasterizer = rasterizer
@@ -67,11 +72,18 @@ class MeshRendererWithDepth(nn.Module):
 
 
 class Renderer(nn.Module):
+    """
+    渲染器类
+    """
     def __init__(self):
         super().__init__()
         self.raster_settings = None
 
     def set_rasterization(self, cameras):
+        """
+        设置光栅化参数
+        :param cameras: 相机对象
+        """
         image_size = tuple(cameras.image_size[0].detach().cpu().numpy())
         self.raster_settings = RasterizationSettings(
             image_size=(int(image_size[0]), int(image_size[1])),
@@ -97,12 +109,18 @@ class Renderer(nn.Module):
 
 
 class RendererBev(nn.Module):
+    """
+    BEV（鸟瞰图）渲染器类
+    """
     def __init__(self):
         super().__init__()
         self.raster_settings = None
-        self.image_size = tuple((640, 1024))  # FOV cameras do not have image_size
+        self.image_size = tuple((640, 1024))  # FOV相机没有image_size
 
     def set_rasterization(self):
+        """
+        设置光栅化参数
+        """
         image_size = self.image_size
         self.raster_settings = RasterizationSettings(
             image_size=(int(image_size[0]), int(image_size[1])),
@@ -117,7 +135,7 @@ class RendererBev(nn.Module):
             self.set_rasterization()
 
         mesh_renderer = MeshRendererWithDepth(
-            rasterizer=MeshRasterizer(
+            rasterizer=MeshRenderer(
                 cameras=cameras,
                 raster_settings=self.raster_settings
             ),

@@ -8,25 +8,21 @@ def intersect_and_union(pred_label,
                         ignore_index,
                         label_map=dict(),
                         reduce_zero_label=False):
-    """Calculate intersection and Union.
+    """计算交集和并集
 
     Args:
-        pred_label (ndarray): Prediction segmentation map.
-        label (ndarray): Ground truth segmentation map.
-        num_classes (int): Number of categories.
-        ignore_index (int): Index that will be ignored in evaluation.
-        label_map (dict): Mapping old labels to new labels. The parameter will
-            work only when label is str. Default: dict().
-        reduce_zero_label (bool): Wether ignore zero label. The parameter will
-            work only when label is str. Default: False.
+        pred_label (ndarray): 预测分割图
+        label (ndarray): 真实分割图
+        num_classes (int): 类别数量
+        ignore_index (int): 评估中忽略的索引
+        label_map (dict): 将旧标签映射到新标签的参数，仅在label为str时有效。默认: dict()
+        reduce_zero_label (bool): 是否忽略零标签，仅在label为str时有效。默认: False
 
      Returns:
-         ndarray: The intersection of prediction and ground truth histogram
-             on all classes.
-         ndarray: The union of prediction and ground truth histogram on all
-             classes.
-         ndarray: The prediction histogram on all classes.
-         ndarray: The ground truth histogram on all classes.
+         ndarray: 预测和真实标签在所有类别上的交集直方图
+         ndarray: 预测和真实标签在所有类别上的并集直方图
+         ndarray: 所有类别上的预测直方图
+         ndarray: 所有类别上的真实标签直方图
     """
 
     if isinstance(pred_label, str):
@@ -34,12 +30,12 @@ def intersect_and_union(pred_label,
 
     if isinstance(label, str):
         label = mmcv.imread(label, flag='unchanged', backend='pillow')
-    # modify if custom classes
+    # 如果有自定义类别则进行修改
     if label_map is not None:
         for old_id, new_id in label_map.items():
             label[label == old_id] = new_id
     if reduce_zero_label:
-        # avoid using underflow conversion
+        # 避免使用下溢转换
         label[label == 0] = 255
         label = label - 1
         label[label == 254] = 255
@@ -65,23 +61,21 @@ def total_intersect_and_union(results,
                               ignore_index,
                               label_map=dict(),
                               reduce_zero_label=False):
-    """Calculate Total Intersection and Union.
+    """计算总交集和并集
 
     Args:
-        results (list[ndarray]): List of prediction segmentation maps.
-        gt_seg_maps (list[ndarray]): list of ground truth segmentation maps.
-        num_classes (int): Number of categories.
-        ignore_index (int): Index that will be ignored in evaluation.
-        label_map (dict): Mapping old labels to new labels. Default: dict().
-        reduce_zero_label (bool): Wether ignore zero label. Default: False.
+        results (list[ndarray]): 预测分割图列表
+        gt_seg_maps (list[ndarray]): 真实分割图列表
+        num_classes (int): 类别数量
+        ignore_index (int): 评估中忽略的索引
+        label_map (dict): 将旧标签映射到新标签。默认: dict()
+        reduce_zero_label (bool): 是否忽略零标签。默认: False
 
      Returns:
-         ndarray: The intersection of prediction and ground truth histogram
-             on all classes.
-         ndarray: The union of prediction and ground truth histogram on all
-             classes.
-         ndarray: The prediction histogram on all classes.
-         ndarray: The ground truth histogram on all classes.
+         ndarray: 预测和真实标签在所有类别上的交集直方图
+         ndarray: 预测和真实标签在所有类别上的并集直方图
+         ndarray: 所有类别上的预测直方图
+         ndarray: 所有类别上的真实标签直方图
     """
 
     num_imgs = len(results)
@@ -109,22 +103,21 @@ def mean_iou(results,
              nan_to_num=None,
              label_map=dict(),
              reduce_zero_label=False):
-    """Calculate Mean Intersection and Union (mIoU)
+    """计算平均交并比 (mIoU)
 
     Args:
-        results (list[ndarray]): List of prediction segmentation maps.
-        gt_seg_maps (list[ndarray]): list of ground truth segmentation maps.
-        num_classes (int): Number of categories.
-        ignore_index (int): Index that will be ignored in evaluation.
-        nan_to_num (int, optional): If specified, NaN values will be replaced
-            by the numbers defined by the user. Default: None.
-        label_map (dict): Mapping old labels to new labels. Default: dict().
-        reduce_zero_label (bool): Wether ignore zero label. Default: False.
+        results (list[ndarray]): 预测分割图列表
+        gt_seg_maps (list[ndarray]): 真实分割图列表
+        num_classes (int): 类别数量
+        ignore_index (int): 评估中忽略的索引
+        nan_to_num (int, optional): 如果指定，NaN值将被用户定义的数字替换。默认: None
+        label_map (dict): 将旧标签映射到新标签。默认: dict()
+        reduce_zero_label (bool): 是否忽略零标签。默认: False
 
      Returns:
-         float: Overall accuracy on all images.
-         ndarray: Per category accuracy, shape (num_classes, ).
-         ndarray: Per category IoU, shape (num_classes, ).
+         float: 所有图像上的整体准确率
+         ndarray: 每类别准确率，形状 (num_classes, )
+         ndarray: 每类别IoU，形状 (num_classes, )
     """
 
     all_acc, acc, iou = eval_metrics(
@@ -146,22 +139,21 @@ def mean_dice(results,
               nan_to_num=None,
               label_map=dict(),
               reduce_zero_label=False):
-    """Calculate Mean Dice (mDice)
+    """计算平均Dice系数 (mDice)
 
     Args:
-        results (list[ndarray]): List of prediction segmentation maps.
-        gt_seg_maps (list[ndarray]): list of ground truth segmentation maps.
-        num_classes (int): Number of categories.
-        ignore_index (int): Index that will be ignored in evaluation.
-        nan_to_num (int, optional): If specified, NaN values will be replaced
-            by the numbers defined by the user. Default: None.
-        label_map (dict): Mapping old labels to new labels. Default: dict().
-        reduce_zero_label (bool): Wether ignore zero label. Default: False.
+        results (list[ndarray]): 预测分割图列表
+        gt_seg_maps (list[ndarray]): 真实分割图列表
+        num_classes (int): 类别数量
+        ignore_index (int): 评估中忽略的索引
+        nan_to_num (int, optional): 如果指定，NaN值将被用户定义的数字替换。默认: None
+        label_map (dict): 将旧标签映射到新标签。默认: dict()
+        reduce_zero_label (bool): 是否忽略零标签。默认: False
 
      Returns:
-         float: Overall accuracy on all images.
-         ndarray: Per category accuracy, shape (num_classes, ).
-         ndarray: Per category dice, shape (num_classes, ).
+         float: 所有图像上的整体准确率
+         ndarray: 每类别准确率，形状 (num_classes, )
+         ndarray: 每类别dice，形状 (num_classes, )
     """
 
     all_acc, acc, dice = eval_metrics(
@@ -184,21 +176,22 @@ def eval_metrics(results,
                  nan_to_num=None,
                  label_map=dict(),
                  reduce_zero_label=False):
-    """Calculate evaluation metrics
+    """计算评估指标
+
     Args:
-        results (list[ndarray]): List of prediction segmentation maps.
-        gt_seg_maps (list[ndarray]): list of ground truth segmentation maps.
-        num_classes (int): Number of categories.
-        ignore_index (int): Index that will be ignored in evaluation.
-        metrics (list[str] | str): Metrics to be evaluated, 'mIoU' and 'mDice'.
-        nan_to_num (int, optional): If specified, NaN values will be replaced
-            by the numbers defined by the user. Default: None.
-        label_map (dict): Mapping old labels to new labels. Default: dict().
-        reduce_zero_label (bool): Wether ignore zero label. Default: False.
+        results (list[ndarray]): 预测分割图列表
+        gt_seg_maps (list[ndarray]): 真实分割图列表
+        num_classes (int): 类别数量
+        ignore_index (int): 评估中忽略的索引
+        metrics (list[str] | str): 要评估的指标，'mIoU' 和 'mDice'
+        nan_to_num (int, optional): 如果指定，NaN值将被用户定义的数字替换。默认: None
+        label_map (dict): 将旧标签映射到新标签。默认: dict()
+        reduce_zero_label (bool): 是否忽略零标签。默认: False
+
      Returns:
-         float: Overall accuracy on all images.
-         ndarray: Per category accuracy, shape (num_classes, ).
-         ndarray: Per category evalution metrics, shape (num_classes, ).
+         float: 所有图像上的整体准确率
+         ndarray: 每类别准确率，形状 (num_classes, )
+         ndarray: 每类别评估指标，形状 (num_classes, )
     """
 
     if isinstance(metrics, str):

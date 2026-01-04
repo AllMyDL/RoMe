@@ -2,7 +2,16 @@
 from os.path import join
 from nuscenes.nuscenes import NuScenes
 
+
 def crawl_scenes_paths(root_dir, version, scenes, camera_names):
+    """
+    从指定场景中抓取相机路径
+    :param root_dir: 根目录
+    :param version: 版本
+    :param scenes: 场景列表
+    :param camera_names: 相机名称列表
+    :return: 路径列表
+    """
     nusc = NuScenes(version="v1.0-{}".format(version), dataroot=root_dir, verbose=True)
     samples = [samp for samp in nusc.sample]
     paths = []
@@ -12,18 +21,18 @@ def crawl_scenes_paths(root_dir, version, scenes, camera_names):
             continue
         records = [samp for samp in samples if
                     nusc.get("scene", samp["scene_token"])["name"] in scene_name]
-        # sort by timestamp (only to make chronological viz easier)
+        # 按时间戳排序（仅为便于按时间顺序可视化）
         records.sort(key=lambda x: (x['timestamp']))
-        # interpolate images from 2HZ to 12 HZ
+        # 将图像从2HZ插值到12HZ
         for index in range(len(records)):
             rec = records[index]
             for cam in camera_names:
-                # compute camera key frame poses
+                # 计算相机关键帧位姿
                 rec_token = rec["data"][cam]
                 samp = nusc.get("sample_data", rec_token)
-                flag = True  
-                # compute first key frame and framse between first frame and second frame
-                while flag or not samp["is_key_frame"]: 
+                flag = True
+                # 计算第一个关键帧和第一帧与第二帧之间的帧
+                while flag or not samp["is_key_frame"]:
                     flag = False
                     rel_camera_path = samp["filename"]
                     camera_path = join(root_dir, rel_camera_path)
@@ -40,6 +49,6 @@ if __name__ == "__main__":
     root_dir = "#####/Nuscenes"
     version = "trainval"
     scenes = ["scene-0546", "scene-0556", "scene-0558", "scene-0769"]
-    camera_names = ["CAM_FRONT", "CAM_FRONT_LEFT", "CAM_FRONT_RIGHT", 
+    camera_names = ["CAM_FRONT", "CAM_FRONT_LEFT", "CAM_FRONT_RIGHT",
                     "CAM_BACK", "CAM_BACK_LEFT", "CAM_BACK_RIGHT"]
     paths = crawl_scenes_paths(root_dir, version, scenes, camera_names)

@@ -5,8 +5,9 @@ from scipy.spatial.transform import Rotation as RotLib
 
 def SO3_to_quat(R):
     """
-    :param R:  (N, 3, 3) or (3, 3) np
-    :return:   (N, 4, ) or (4, ) np
+    将SO(3)旋转矩阵转换为四元数
+    :param R: (N, 3, 3) 或 (3, 3) numpy数组
+    :return: (N, 4) 或 (4,) numpy数组
     """
     x = RotLib.from_matrix(R)
     quat = x.as_quat()
@@ -15,8 +16,9 @@ def SO3_to_quat(R):
 
 def quat_to_SO3(quat):
     """
-    :param quat:    (N, 4, ) or (4, ) np
-    :return:        (N, 3, 3) or (3, 3) np
+    将四元数转换为SO(3)旋转矩阵
+    :param quat: (N, 4) 或 (4,) numpy数组
+    :return: (N, 3, 3) 或 (3, 3) numpy数组
     """
     x = RotLib.from_quat(quat)
     R = x.as_matrix()
@@ -25,8 +27,9 @@ def quat_to_SO3(quat):
 
 def convert3x4_4x4(input):
     """
-    :param input:  (N, 3, 4) or (3, 4) torch or np
-    :return:       (N, 4, 4) or (4, 4) torch or np
+    将3x4变换矩阵转换为4x4齐次变换矩阵
+    :param input: (N, 3, 4) 或 (3, 4) torch或np数组
+    :return: (N, 4, 4) 或 (4, 4) torch或np数组
     """
     if torch.is_tensor(input):
         if len(input.shape) == 3:
@@ -46,8 +49,9 @@ def convert3x4_4x4(input):
 
 def vec2skew(v):
     """
-    :param v:  (B, 3) torch tensor
-    :return:   (B, 3, 3)
+    将向量转换为斜对称矩阵
+    :param v: (B, 3) torch张量
+    :return: (B, 3, 3)
     """
     B = v.shape[0]
     zero = torch.zeros((B,1), dtype=torch.float32, device=v.device)
@@ -59,9 +63,10 @@ def vec2skew(v):
 
 
 def Exp(r):
-    """so(3) vector to SO(3) matrix
-    :param r: (B, 3) axis-angle, torch tensor
-    :return:  (B, 3, 3)
+    """
+    so(3)向量到SO(3)矩阵的指数映射
+    :param r: (B, 3) 轴角向量，torch张量
+    :return: (B, 3, 3)
     """
     B = r.shape[0]
     skew_r = vec2skew(r)  # (B, 3, 3)
@@ -73,9 +78,10 @@ def Exp(r):
 
 def axis_angle2matrix(r, t):
     """
-    :param r:  (B, 3) axis-angle             torch tensor
-    :param t:  (B, 3) translation vector     torch tensor
-    :return:   (B, 4, 4)
+    将轴角和平移向量转换为4x4变换矩阵
+    :param r: (B, 3) 轴角向量 torch张量
+    :param t: (B, 3) 平移向量 torch张量
+    :return: (B, 4, 4)
     """
     R = Exp(r)  # (B, 3, 3)
     c2w = torch.cat([R, t.unsqueeze(2)], dim=2)  # (B, 3, 4)

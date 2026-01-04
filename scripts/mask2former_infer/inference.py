@@ -1,41 +1,47 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # Modified by Bowen Cheng from: https://github.com/facebookresearch/detectron2/blob/master/demo/demo.py
-from kitti_dataset import CrawlKittiDataPath
-from nuscenes_scenes import crawl_scenes_paths
-from nuscenes_dataset import CrawlNuScenesDataPath
-from predictor import VisualizationDemo
-from mask2former import add_maskformer2_config
-from detectron2.utils.logger import setup_logger
-from detectron2.projects.deeplab import add_deeplab_config
-from detectron2.data.detection_utils import read_image
-from detectron2.config import get_cfg
-from os.path import join
-from pathlib import Path
-import tqdm
-import numpy as np
-import cv2
-import warnings
-import time
-import tempfile
-import argparse
-import glob
-import multiprocessing as mp
-import os
-from poplib import CR
+# 该文件基于 Facebook 的 detectron2 库修改，用于 Mask2Former 的推理演示
+from kitti_dataset import CrawlKittiDataPath  # 导入 KITTI 数据集路径爬取类
+from nuscenes_scenes import crawl_scenes_paths  # 导入 NuScenes 场景路径爬取函数
+from nuscenes_dataset import CrawlNuScenesDataPath  # 导入 NuScenes 数据集路径爬取类
+from predictor import VisualizationDemo  # 导入可视化演示类
+from mask2former import add_maskformer2_config  # 导入 Mask2Former 配置添加函数
+from detectron2.utils.logger import setup_logger  # 导入日志设置函数
+from detectron2.projects.deeplab import add_deeplab_config  # 导入 DeepLab 配置添加函数
+from detectron2.data.detection_utils import read_image  # 导入图像读取函数
+from detectron2.config import get_cfg  # 导入配置获取函数
+from os.path import join  # 导入路径连接函数
+from pathlib import Path  # 导入路径处理类
+import tqdm  # 导入进度条库
+import numpy as np  # 导入 NumPy 库
+import cv2  # 导入 OpenCV 库
+import warnings  # 导入警告库
+import time  # 导入时间库
+import tempfile  # 导入临时文件库
+import argparse  # 导入命令行参数解析库
+import glob  # 导入文件匹配库
+import multiprocessing as mp  # 导入多进程库
+import os  # 导入操作系统库
+from poplib import CR  # 导入 POP3 库的 CR 常量（可能未使用）
 
 # fmt: off
-import sys
-from turtle import pd
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+import sys  # 导入系统库
+from turtle import pd  # 导入 turtle 库的 pd（可能未使用）
+sys.path.insert(1, os.path.join(sys.path[0], '..'))  # 将上级目录添加到系统路径
 # fmt: on
 
 
-# constants
-WINDOW_NAME = "mask2former demo"
+# 常量定义
+WINDOW_NAME = "mask2former demo"  # 窗口名称常量
 
 
 def setup_cfg(args):
-    # load config from file and command-line arguments
+    """
+    从文件和命令行参数加载配置
+    :param args: 命令行参数
+    :return: 配置对象
+    """
+    # 从文件和命令行参数加载配置
     cfg = get_cfg()
     add_deeplab_config(cfg)
     add_maskformer2_config(cfg)
@@ -46,6 +52,10 @@ def setup_cfg(args):
 
 
 def get_parser():
+    """
+    获取命令行参数解析器
+    :return: 参数解析器
+    """
     parser = argparse.ArgumentParser(description="maskformer2 demo for builtin configs")
     parser.add_argument(
         "--config-file",
@@ -88,6 +98,12 @@ def get_parser():
 
 
 def test_opencv_video_format(codec, file_ext):
+    """
+    测试OpenCV视频格式
+    :param codec: 编解码器
+    :param file_ext: 文件扩展名
+    :return: 是否支持该格式
+    """
     with tempfile.TemporaryDirectory(prefix="video_format_test") as dir:
         filename = os.path.join(dir, "test_file" + file_ext)
         writer = cv2.VideoWriter(
@@ -105,20 +121,21 @@ def test_opencv_video_format(codec, file_ext):
 
 
 if __name__ == "__main__":
-    mp.set_start_method("spawn", force=True)
-    args = get_parser().parse_args()
-    setup_logger(name="fvcore")
-    logger = setup_logger()
-    logger.info("Arguments: " + str(args))
+    mp.set_start_method("spawn", force=True)  # 设置多进程启动方法为 spawn
+    args = get_parser().parse_args()  # 解析命令行参数
+    setup_logger(name="fvcore")  # 设置 fvcore 日志
+    logger = setup_logger()  # 获取日志记录器
+    logger.info("Arguments: " + str(args))  # 记录参数信息
 
-    cfg = setup_cfg(args)
+    cfg = setup_cfg(args)  # 设置配置
 
-    demo = VisualizationDemo(cfg)
+    demo = VisualizationDemo(cfg)  # 创建可视化演示实例
+    # 相机名称列表（注释掉的部分）
     # camera_names = ["CAM_FRONT", "CAM_FRONT_LEFT", "CAM_FRONT_RIGHT",
     #                 "CAM_BACK", "CAM_BACK_LEFT", "CAM_BACK_RIGHT"]
     # camera_names = ["CAM_FRONT", "CAM_FRONT_LEFT", "CAM_FRONT_RIGHT"]
     # camera_names = ["CAM_BACK", "CAM_BACK_LEFT", "CAM_BACK_RIGHT"]
-    # # create output dir
+    # # 为每个相机创建输出目录
     # for cam in camera_names:
     #     cam_path = join(args.save_dir, cam)
     #     Path(cam_path).mkdir(parents=True, exist_ok=True)
@@ -126,7 +143,7 @@ if __name__ == "__main__":
     #     Path(cam_path).mkdir(parents=True, exist_ok=True)
     #     cam_path = cam_path.replace("/seg_CAM", "/vis_seg_CAM")
     #     Path(cam_path).mkdir(parents=True, exist_ok=True)
-    # # Nuscenes
+    # # NuScenes 数据集处理（注释掉的部分）
     # file_paths = CrawlNuScenesDataPath(args.base_dir, camera_names)
 
     # root_dir = "#####/Nuscenes"
@@ -156,7 +173,7 @@ if __name__ == "__main__":
     label_save_paths = [file_path.replace(base_dir, save_dir) for file_path in file_paths]
     vis_label_save_paths = [file_path.replace(base_dir, vis_dir) for file_path in file_paths]
     for i in tqdm.tqdm(range(len(file_paths))):
-        # use PIL, to be consistent with evaluation
+        # 使用PIL，与评估保持一致
         source_name = file_paths[i]
         # vis_label_name = vis_label_save_paths[i]
         label_name = label_save_paths[i]

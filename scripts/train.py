@@ -1,28 +1,34 @@
-import argparse
-import yaml
-from tqdm import tqdm
-import random
+# RoMe 项目训练脚本
+# 该脚本用于训练模型，包括网格优化、外参优化等
 
-import numpy as np
-import torch
-import os
-import cv2
-from os.path import join
-from torch.optim.lr_scheduler import MultiStepLR
-from torch.utils.data import DataLoader
-from pytorch3d.renderer import PerspectiveCameras
-from models.loss import L1MaskedLoss, CELossWithMask
-from utils.geometry import fps_by_distance
-from utils.renderer import Renderer
-from utils.visualizer import Visualizer, loss2color, depth2color, save_cut_mesh, save_cut_label_mesh
-from utils.wandb_loggers import WandbLogger
-from utils.image import render_semantic
-from models.pose_model import ExtrinsicModel
-from pytorch3d.loss import mesh_laplacian_smoothing
-from eval import eval
+import argparse  # 命令行参数解析
+import yaml  # YAML 文件处理
+from tqdm import tqdm  # 进度条显示
+import random  # 随机数生成
+
+import numpy as np  # 数值计算
+import torch  # PyTorch 深度学习框架
+import os  # 操作系统接口
+import cv2  # OpenCV 图像处理
+from os.path import join  # 路径拼接
+from torch.optim.lr_scheduler import MultiStepLR  # 多步学习率调度器
+from torch.utils.data import DataLoader  # 数据加载器
+from pytorch3d.renderer import PerspectiveCameras  # PyTorch3D 透视相机
+from models.loss import L1MaskedLoss, CELossWithMask  # 损失函数
+from utils.geometry import fps_by_distance  # 几何工具：基于距离的 FPS
+from utils.renderer import Renderer  # 渲染器
+from utils.visualizer import Visualizer, loss2color, depth2color, save_cut_mesh, save_cut_label_mesh  # 可视化工具
+from utils.wandb_loggers import WandbLogger  # Wandb 日志记录器
+from utils.image import render_semantic  # 图像工具：语义渲染
+from models.pose_model import ExtrinsicModel  # 外参模型
+from pytorch3d.loss import mesh_laplacian_smoothing  # 网格拉普拉斯平滑损失
+from eval import eval  # 评估函数
 
 
 def set_randomness(args):
+    """
+    设置随机种子以确保实验的可重现性
+    """
     random.seed(args["rand_seed"])
     np.random.seed(args["rand_seed"])
     torch.manual_seed(args["rand_seed"])
@@ -31,6 +37,9 @@ def set_randomness(args):
 
 
 def get_configs():
+    """
+    从命令行参数获取配置文件路径，并加载 YAML 配置
+    """
     parser = argparse.ArgumentParser(description='G4M config')
     parser.add_argument(
         '--config',
@@ -43,11 +52,15 @@ def get_configs():
 
 
 def train(configs):
+    """
+    主要的训练函数
+    """
     set_randomness(configs)
     if configs["cluster"]:
-        os.environ['WANDB_MODE'] = 'offline'
-    device = torch.device("cuda:0")
+        os.environ['WANDB_MODE'] = 'offline'  # 在集群上禁用 Wandb
+    device = torch.device("cuda:0")  # 使用 GPU
 
+    # 根据数据集类型导入相应的数据集类
     if configs["dataset"] == "NuscDataset":
         from datasets.nusc import NuscDataset as Dataset
     elif configs["dataset"] == "KittiDataset":
@@ -55,18 +68,18 @@ def train(configs):
     else:
         raise NotImplementedError("Dataset not implemented")
 
-    logger = WandbLogger(configs)
-    visualizer = Visualizer(device, configs)
-    renderer = Renderer().to(device)
-    dataset = Dataset(configs)
-    supervise_depth_list = ["FsdDataset", "CarlaDataset"]
-    # supervise_depth_list = ["CarlaDataset"]
+    logger = WandbLogger(configs)  # 初始化 Wandb 日志记录器
+    visualizer = Visualizer(device, configs)  # 初始化可视化器
+    renderer = Renderer().to(device)  # 初始化渲染器
+    dataset = Dataset(configs)  # 初始化数据集
+    supervise_depth_list = ["FsdDataset", "CarlaDataset"]  # 支持深度监督的数据集列表
 
+    # 计算相机位姿偏移
     pose_xy = np.array(dataset.ref_camera2world_all)[:, :2, 3]
     offset_pose_xy = pose_xy - np.asarray([configs["center_point"]["x"], configs["center_point"]["y"]])
     print(f"Get {len(dataset.ref_camera2world_all)} images for mapping")
 
-    # Load grid and optimization toggles
+    # 加载网格和优化选项
     optim_dict = dict()
     for optim_option in ["vertices_rgb", "vertices_label", "vertices_z", "rotations", "translations"]:
         if configs["lr"].get(optim_option, 0) != 0:
@@ -76,7 +89,7 @@ def train(configs):
             optim_dict[optim_option] = False
             print("{} optimization is OFF".format(optim_option))
 
-    # Choose Different grid generator according to configs
+    # 根据优化选项选择不同的网格生成器
     if optim_dict["vertices_rgb"] and optim_dict["vertices_label"] and (not optim_dict["vertices_z"]):
         from models.voxel import SquareFlatGridRGBLabel as SquareFlatGrid
     elif optim_dict["vertices_rgb"] and (not optim_dict["vertices_label"]) and optim_dict["vertices_z"]:
@@ -92,6 +105,7 @@ def train(configs):
     else:
         raise NotImplementedError("No such grid generator, please check your config[\"lr\"]")
 
+    # 初始化网格
     if optim_dict["vertices_z"]:
         grid = SquareFlatGrid(configs["bev_x_length"], configs["bev_y_length"], offset_pose_xy,
                               configs["bev_resolution"], dataset.num_class, configs["pos_enc"], configs["cut_range"])
@@ -101,7 +115,7 @@ def train(configs):
     grid = grid.to(device)
     grid.init_vertices_z()
 
-    # Prepare trainable parameters
+    # 准备可训练参数
     parameters = []
     z_parameters = []
     pose_parameters = []
@@ -111,11 +125,12 @@ def train(configs):
         else:
             z_parameters.append({"params": param, "lr": float(configs["lr"]["vertices_z"])})
 
+    # 初始化外参模型
     poses = ExtrinsicModel(configs, optim_dict["rotations"], optim_dict["translations"], num_camera=len(dataset.camera_extrinsics)).to(device)
     for param_key, param in poses.named_parameters():
         pose_parameters.append({"params": param, "lr": float(configs["lr"][param_key])})
 
-    # Prepare loss function and optimizer
+    # 准备损失函数和优化器
     optimizer = torch.optim.Adam(parameters)
     scheduler = MultiStepLR(optimizer, milestones=configs["lr_milestones"], gamma=configs["lr_gamma"])
     if optim_dict["vertices_z"]:
@@ -127,9 +142,10 @@ def train(configs):
     CE_loss_with_mask = CELossWithMask()
 
     radius = configs["waypoint_radius"]
-    # Start optimization
+    # 开始优化
     loop = tqdm(range(1, configs["epochs"]+1))
     for epoch in loop:
+        # 使用 FPS 选择路径点
         waypoints = fps_by_distance(pose_xy, min_distance=radius*2, return_idx=False)
         print(f"epoch-{epoch}: get {waypoints.shape[0]} waypoints")
         loss_dict = dict()
@@ -157,19 +173,23 @@ def train(configs):
                                     drop_last=True)
 
             for sample in dataloader:
+                # 将样本数据移动到设备
                 for key, ipt in sample.items():
                     if key != "image_path":
                         sample[key] = ipt.clone().detach().to(device)
+                # 生成网格
                 if optim_dict["vertices_z"]:
                     mesh = grid(activation_idx, configs["batch_size"])
                 else:
                     mesh = grid(configs["batch_size"])
+                # 获取外参
                 pose = poses(sample["camera_idx"])
                 if epoch >= configs["extrinsic"]["start_epoch"]:
                     transform = pose @ sample["Transform_pytorch3d"]
                 else:
                     transform = sample["Transform_pytorch3d"]
 
+                # 设置相机参数
                 R_pytorch3d = transform[:, :3, :3]
                 T_pytorch3d = transform[:, :3, 3]
                 focal_pytorch3d = sample["focal_pytorch3d"]
@@ -188,6 +208,7 @@ def train(configs):
                     gt_depth = sample["depth"]
                 gt_seg = sample["static_label"]
 
+                # 渲染图像和深度
                 images_feature, depth = renderer({"mesh": mesh, "cameras": cameras})
                 silhouette = images_feature[:, :, :, -1]
                 silhouette[silhouette > 0] = 1
@@ -203,19 +224,23 @@ def train(configs):
                 else:
                     images_seg = images_feature[:, :, :, :-1]
 
+                # 梯度清零
                 optimizer.zero_grad()
                 if optim_dict["vertices_z"]:
                     z_optimizer.zero_grad()
                 if optim_dict["translations"] or optim_dict["rotations"]:
                     pose_optimizer.zero_grad()
                 total_loss = 0
+                # 计算渲染损失
                 if optim_dict["vertices_rgb"]:
                     render_loss = loss_fuction(images, gt_image, mask)
                     total_loss += render_loss.mean()
+                # 计算分割损失
                 if optim_dict["vertices_label"]:
                     seg_loss = CE_loss_with_mask(images_seg.reshape(-1, images_seg.shape[-1]),
                                                  gt_seg.reshape(-1), mask.reshape(-1)) * configs["seg_loss_weight"]
                     total_loss += seg_loss
+                # 计算深度和拉普拉斯损失
                 if optim_dict["vertices_z"]:
                     if configs["dataset"] in supervise_depth_list:
                         mask_depth = gt_depth > 0
@@ -224,10 +249,12 @@ def train(configs):
                     laplacian_loss = mesh_laplacian_smoothing(mesh) * configs["laplacian_loss_weight"]
                     total_loss += laplacian_loss
 
+                # 反向传播和优化
                 total_loss.backward()
                 optimizer.step()
                 z_optimizer.step() if z_parameters else None
                 pose_optimizer.step() if pose_parameters else None
+                # 记录损失
                 if optim_dict["vertices_rgb"]:
                     loss_dict["render_loss"] += render_loss.mean().detach().cpu().numpy()
                 if optim_dict["vertices_label"]:
@@ -246,7 +273,7 @@ def train(configs):
                 mesh = grid(configs["batch_size"])
 
         if not configs["cluster"]:
-            # Log to wandb
+            # 记录到 Wandb
             for key, value in loss_dict.items():
                 loss_dict[key] = value / len(dataloader)
             logger.log(loss_dict, epoch)
@@ -270,11 +297,11 @@ def train(configs):
                 logger.log_image("gt_image", gt_image_0, epoch)
             if optim_dict["vertices_label"]:
                 bev_seg = np.argmax(bev_seg, axis=-1)
-                bev_seg = render_semantic(bev_seg, dataset.filted_color_map)  # RGB fomat
+                bev_seg = render_semantic(bev_seg, dataset.filted_color_map)  # RGB 格式
                 bev_seg = bev_seg[::-1, ::-1, :]
                 render_seg = images_seg[0].detach().cpu().numpy()
                 render_seg = np.argmax(render_seg, axis=-1)
-                render_seg = render_semantic(render_seg, dataset.filted_color_map)  # RGB fomat
+                render_seg = render_semantic(render_seg, dataset.filted_color_map)  # RGB 格式
                 render_gt_seg = render_semantic(gt_seg[0].detach().cpu().numpy(), dataset.filted_color_map)
                 render_mask = (mask[0].detach().cpu().numpy() * 255).astype(np.uint8)
                 blend_image = cv2.addWeighted(gt_image_0, 0.5, render_seg, 0.5, 0)
@@ -309,11 +336,11 @@ def train(configs):
                 loss_dict["total_loss"])
             loop.set_description(description)
 
-    # Save .obj file
+    # 保存 .obj 文件
     save_cut_mesh(mesh[0], join(logger.dir, f"bev_mesh_epoch_{epoch}.obj"))
     save_cut_label_mesh(mesh[0], join(logger.dir, f"bev_label_mesh_epoch_{epoch}.obj"), dataset.filted_color_map)
 
-    # Save model
+    # 保存模型
     grid.eval()
     poses.eval()
     torch.save(grid, join(logger.dir, "grid_baseline.pt"))
